@@ -515,9 +515,9 @@ class PythonGenerator(GenericMcu):
         return result
     
 class IEC61499Generator(GenericMcu):
-    templates_name = ['fb_iec61499.fbt']
+    templates_name = ['generic_iec61499.fbt']
     template_path = 'codegen/templates'
-
+#provavelmente não preciso da maioria das funções já que com automato consigo todas as informações necessarias
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.set_device('IEC61499')
@@ -525,7 +525,10 @@ class IEC61499Generator(GenericMcu):
 
     def generate_sup(self, automaton_list):
         data_pos = dict()
-        state_map = dict()
+        #state_map = dict() 
+        #this implementation generates one function block for each automata
+        #so there is no need to use a state_map, as the states are stored by their names
+        states = list()
         data = list()
         event_map = list()
         events = set()
@@ -533,34 +536,35 @@ class IEC61499Generator(GenericMcu):
 
         for k_automaton, automaton in enumerate(automaton_list):
             data_pos[k_automaton] = len(data)
-            for k_state, state in enumerate(automaton.states):
-                state_map[state] = k_state
-                if state == automaton.initial_state:
-                    initial_state.append(k_state)#?????porque uma lista e porque não faz essa vericação uma vez só?????
+            initial_state= automaton.initial_state
+
+            for state in automaton.states:
+                states.append(state)
+            
             for state in automaton.states:
                 data.append(len(state.out_transitions))
                 for transition in state.out_transitions:
                     if transition.event.name not in [ev.name for ev in events]:
                         events.add(transition.event)
                     data.append(f'EV_{transition.event.name}')
-                    data.append(math.floor(state_map[transition.to_state] / 256))
-                    data.append(state_map[transition.to_state] % 256)
+                    data.append(transition.from_state)
+                    data.append(transition.to_state)
 
         for automaton in automaton_list:
             event_map.append([True if event.name in [ev.name for ev in automaton.events] else False for event in events])
 
-
+        """
         print("Data list:")
         for info in data:
             print(info)
         print("end")
         print("data_pos list:")
-        for info in data_pos:
-            print(info)  
+        for key, value in data_pos.items():
+            print(f"{key}->{value}") 
         print("end")
-        print("state_map list:")
-        for info in state_map:
-            print(info)
+        print("states list:")
+        for state in states:
+            print(state)
         print("end")
         print("events list:")
         for info in events:
@@ -570,17 +574,86 @@ class IEC61499Generator(GenericMcu):
         for info in event_map:
             print(info)
         print("end")
-        print("initial_state list:")
-        for info in initial_state:
-            print(info)
+        print("initial_state:")
+        print(initial_state)
         print("end")
+        """
+        return data, data_pos, states, events, event_map, initial_state
 
-        return data, data_pos, state_map, events, event_map, initial_state
+    def write(self, automata_list, vars_dict, output_path):
+        for automato in automata_list:
+            print(type(automato))
+            print(automato.get_name())
+            print(automato)
 
-    def write(self, automatons, vars_dict, output_path):
-        output_dict = self.generate_strings(automatons)
-        output_dict.update(vars_dict)
-        self._write(output_path, output_dict)
+        eg_list = list()
+        """
+            self.path = path
+            self.su_name = su_name
+            self.event_name = event_name
+            self.enabled_states = enabled_states
+            self.ms_list = ms_list
+        """
+        for automato in automata_list:
+            if automato._name[0] == "G":
+                fb_name = "SU"+automato._name[1]+".fbt"
+                output_dict = self.generate_su(automato, fb_name, eg_list)
+                output_dict.update(vars_dict)
+                self._write(output_path, output_dict)
+
+
+            elif automato._name[:2] == "RS":
+                fb_name = "MS"+automato._name[2]+".fbt"
+                output_dict = self.generate_ms(automato, fb_name, eg_list)
+                output_dict.update(vars_dict)
+                self._write(output_path, output_dict)
+
+            else:
+                print("File error: " + automato._name)
+    
+        if eg_list:
+            for eg in eg_list:
+                output_dict = self.generate_eg(eg)
+                output_dict.update(vars_dict)
+                self._write(output_path, output_dict)
+
+    
+    def generate_su(self, automato, fb_name, eg_list):
+        #[{"name":"a1"}, {"name:b2"}]
+        event_inputs = list()
+        event_outputs = list()
+
+        #[{"name": "State", "type": "INT"}, {"name": "En_a2", "type": "BOOL"}],
+        input_vars = list()
+        output_vars = list()
+
+        #[{"name": "S0", "alg": "ALG2", "output": "Out"}]
+        states = list()
+
+        #[{"source": "START", "destination": "S0", "condition": "Start"}],
+        transitions = list()
+
+        #[{"name": "ALG2", "st": "State := 2;"}]
+        algorithms = list()
+
+        #######################################################################################################
+        ###                              Aqui ficara o processamento dos dados                              ###
+        ###                            Como descobrir se eventos sao controláveis                           ###
+        #######################################################################################################
+        
+        data = {
+            "fb_name": automato._name,
+            "event_inputs": event_inputs,
+            "event_outputs": event_outputs,
+            "input_vars": input_vars,
+            "output_vars": output_vars,
+            "states": states,
+            "transitions": transitions,
+            "algorithms": algorithms
+        }   
+        print(data)
+        
+        return data
 
     @staticmethod
     def _gen_str(data_to_gen):
@@ -598,8 +671,8 @@ class IEC61499Generator(GenericMcu):
         return {}
 
     def generate_strings(self, automatons):
-        data, data_pos, state_map, events, event_map, initial_state = self.generate_sup(automatons)
-
+        data, data_pos, states, events, event_map, initial_state = self.generate_sup(automatons)
+        print(automatons)
         result = {
             'automaton_list': automatons,
             'events': events,
@@ -612,7 +685,14 @@ class IEC61499Generator(GenericMcu):
             'sup_data': self._gen_str(data),
             'sup_event_map': self._gen_str([[1 if event else 0 for event in automaton_event_list] for automaton_event_list in event_map])
         }
-
+        """
+        print("The generate_strings result is ready:")
+        for key in result:
+            print(key)
+            for value in result[key]:
+                print(f"{key}->{value}")
+        print("end")
+        """
         result.update(self.add_extra_properties(events))
         return result
 
