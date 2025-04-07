@@ -515,70 +515,29 @@ class PythonGenerator(GenericMcu):
         return result
     
 class IEC61499Generator(GenericMcu):
-    templates_name = ['generic_iec61499.fbt']
-    template_path = 'codegen/templates'
+    template_name = 'generic_iec61499.fbt'
+    template_path = 'codegen/templates/'
 #provavelmente não preciso da maioria das funções já que com automato consigo todas as informações necessarias
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.set_device('IEC61499')
         self.set_template_path(self.template_path)
 
-    def generate_sup(self, automaton_list):
-        data_pos = dict()
-        #state_map = dict() 
-        #this implementation generates one function block for each automata
-        #so there is no need to use a state_map, as the states are stored by their names
-        states = list()
-        data = list()
-        event_map = list()
-        events = set()
-        initial_state = list()
+    #override
+    def _write(self, output_path=None, arguments:dict={}):
+        if output_path is None:
+            out_path = f'codegen/output/{arguments['fb_name']}'
+        else:
+            out_path = output_path + '/' + arguments['fb_name']
+        
+        tmplt_vars = self.get_template_variables(self.template_name)
+        vars_to_render = {key: arguments[key] for key in arguments.keys() & tmplt_vars}
+        vars_to_render['generator'] = self
 
-        for k_automaton, automaton in enumerate(automaton_list):
-            data_pos[k_automaton] = len(data)
-            initial_state= automaton.initial_state
-
-            for state in automaton.states:
-                states.append(state)
-            
-            for state in automaton.states:
-                data.append(len(state.out_transitions))
-                for transition in state.out_transitions:
-                    if transition.event.name not in [ev.name for ev in events]:
-                        events.add(transition.event)
-                    data.append(f'EV_{transition.event.name}')
-                    data.append(transition.from_state)
-                    data.append(transition.to_state)
-
-        for automaton in automaton_list:
-            event_map.append([True if event.name in [ev.name for ev in automaton.events] else False for event in events])
-
-        """
-        print("Data list:")
-        for info in data:
-            print(info)
-        print("end")
-        print("data_pos list:")
-        for key, value in data_pos.items():
-            print(f"{key}->{value}") 
-        print("end")
-        print("states list:")
-        for state in states:
-            print(state)
-        print("end")
-        print("events list:")
-        for info in events:
-            print(info)
-        print("end")
-        print("event_map list:")
-        for info in event_map:
-            print(info)
-        print("end")
-        print("initial_state:")
-        print(initial_state)
-        print("end")
-        """
-        return data, data_pos, states, events, event_map, initial_state
+        template = self.environment.get_template(self.template_name)
+        render = template.render(**vars_to_render)
+        with open(out_path, 'w') as out_file:
+            out_file.write(render)
 
     def write(self, automata_list, vars_dict, output_path):
         for automato in automata_list:
@@ -624,11 +583,15 @@ class IEC61499Generator(GenericMcu):
         event_outputs = list()
 
         #[{"name": "State", "type": "INT"}, {"name": "En_a2", "type": "BOOL"}],
-        input_vars = list()
-        output_vars = list()
+        input_vars = None
+        output_dict = dict(name = "State", type = "INT")
+        output_vars = [output_dict]
+        for var in output_vars:
+            print(var["name"])
+            print(var["type"])
 
-        #[{"name": "S0", "alg": "ALG2", "output": "Out"}]
-        states = list()
+        #{"S0":{"alg": "ALG2", "output": "Out"}}
+        states = list() #this will be used to store all the states, including the created auxiliary states
 
         #[{"source": "START", "destination": "S0", "condition": "Start"}],
         transitions = list()
@@ -636,13 +599,70 @@ class IEC61499Generator(GenericMcu):
         #[{"name": "ALG2", "st": "State := 2;"}]
         algorithms = list()
 
-        #######################################################################################################
-        ###                              Aqui ficara o processamento dos dados                              ###
-        ###                            Como descobrir se eventos sao controláveis                           ###
-        #######################################################################################################
-        
+        repeated_states = list()
+        initial_state = automato.initial_state
+
+        for event in automato.event_name_map().values():
+            event_inputs.append({"name":event.name})
+            event_outputs.append({"name":event.name})
+
+        for transition in initial_state.out_transitions:
+            transition_dict = dict(source = "S1_Start", destination = "S"+transition.to_state.name, condition = transition.event)
+            transitions.append(transition_dict)
+
+        for state in automato.states:
+            alg_name = "ALG"+state.name
+            state_dict = dict(name = "S"+state.name, alg = alg_name, output = state.output)  
+            states.append(state_dict) 
+            st_text = f"<![CDATA[State:={state.name};]]>"
+            algorithms.append({"name":alg_name, "st":st_text})
+            
+            #[(event : [from_state])]
+            event_map = {}
+            for transition in state.in_transitions:
+
+                event = transition.event
+                if  event_map[event]:
+                    #criar novo estado para cada transição com evento diferente
+                    #mudar target de todas as transições
+                    #criar free transitions com source nos estados criados e target no estado original
+                    #new_transition = dict(source = transition.from_state, destination = state+"_", condition = transition.event)
+                    event_map[event].append(transition.from_state)
+                else:
+                    event_map[event] = [transition.from_state]
+
+            if len(event_map.keys()) == 1:
+                event = event_map.keys()
+                transition_dict = dict(source = "S"+event_map[event], destination = "S"+state, condition = event)
+                transitions.append(transition_dict)
+            else:    
+                sufix = 'a'
+                state_dict = dict(name = "S"+state.name+"_"+sufix, alg = alg_name, output = state.output)  
+                states.append(state_dict) 
+                for key_event, value_from_states in event_map:
+                    if len(value_from_states) == 1:
+                        transition_dict = dict(source = "S"+value_from_states[0], destination = "S"+state+"_"+sufix, condition = key_event)
+                        transitions.append(transition_dict)
+                    else:
+                        for from_state in value_from_states:
+                            transition_dict = dict(source = "S"+from_state, destination = "S"+state, condition = key_event)
+                            transitions.append(transition_dict)
+                    sufix = chr(ord(sufix)+1)
+
+            #add free transitions
+
+            #####################################################################
+            ### aqui preciso checar se só existe um evento chegando no estado ###
+            ### caso houver mais de um evento chegando no estado              ###
+            ### criar um estado auxiliar para cada evento diferente           ###
+            ### coloca-los como destination de cada transicao                 ###
+            ### criar transicoes livres para o estado original                ###
+            ### estado original nao tem out                                   ###
+            ### no codigo anterior, quando encontava um to_state igual com    ###
+            #####################################################################
+
         data = {
-            "fb_name": automato._name,
+            "fb_name": fb_name,
             "event_inputs": event_inputs,
             "event_outputs": event_outputs,
             "input_vars": input_vars,
