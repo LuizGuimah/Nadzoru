@@ -5,7 +5,8 @@
 	<InterfaceList>{% if event_inputs %}
 		<EventInputs>
 			<Event Name="Start" Type="Event" Comment=""/>{% for event in event_inputs %}
-			<Event Name="{{ event.name }}" Type="Event" Comment=""/>{% endfor %}
+			<Event Name="{{ event.name }}" Type="Event" Comment=""/>{% if event.vars %}{% for var in event.vars %}
+                    <With Var="{{ var }}"/>{% endfor %}{% endif %}{% endfor %}
 		</EventInputs>{% endif %}{% if event_outputs %}
 		<EventOutputs>
 			<Event Name="StartO" Type="Event" Comment="">
@@ -24,7 +25,7 @@
             <VarDeclaration Name="{{ var.name }}" Type="{{ var.type }}"/>{% endfor %}
         </InputVars>{% endif %}{% if output_vars %}
         <OutputVars>{% for var in output_vars %}
-            <Var Name="{{ var.name }}" Type="{{ var.type }}"/>{% endfor %}
+            <VarDeclaration Name="{{ var.name }}" Type="{{ var.type }}" Comment="" InitialValue="1"/>{% endfor %}
         </OutputVars>{% endif %}
 	</InterfaceList>
 	<BasicFB>
@@ -33,13 +34,13 @@
 			<ECState Name="S0_Start" Comment="" x="0" y="0">
 				<ECAction Algorithm="ALG0" Output="StartO"/>
 				<ECAction Output="Out"/>
-			</ECState>{% if states %}{% for name, content in states %}
-			<ECState Name="{{ name }}" Comment="" x="0" y="0">
-				<ECAction Algorithm="{{ content.alg }}" Output="{{ content.output }}"/>
-				<ECAction Output="Out"/>
-			</ECState>{% endfor %}{% endif %}
+			</ECState>{% for state in states %}
+			<ECState Name="{{ state.name }}" Comment="" x="0" y="0">{% if state.alg or state.output %}
+				<ECAction{% if state.alg %} Algorithm="{{ state.alg }}"{% endif %} {% if state.output %}Output="{{ state.output }}"{% endif %}/>
+				<ECAction Output="Out"/>{% endif %}
+			</ECState>{% endfor %}
 			<ECTransition Source="START" Destination="S0_Start" Condition="Start" Comment="" x="0" y="0"/>{% if transitions %}{% for transition in transitions %}
-                <ECTransition Source="{{ transition.source }}" Destination="{{ transition.destination }}" Condition="{{ transition.condition }}" Comment="" x="0" y="0"/>{% endfor %}{% endif %}
+            <ECTransition Source="{{ transition.source }}" Destination="{{ transition.destination }}" Condition="{{ transition.condition }}" Comment="" x="0" y="0"/>{% endfor %}{% endif %}
 		</ECC>{% if algorithms %}{% for alg in algorithms %}
             <Algorithm Name="{{ alg.name }}" Comment="">
                 <ST>{{ alg.st }}</ST>

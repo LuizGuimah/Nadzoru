@@ -526,9 +526,9 @@ class IEC61499Generator(GenericMcu):
     #override
     def _write(self, output_path=None, arguments:dict={}):
         if output_path is None:
-            out_path = f'codegen/output/{arguments['fb_name']}'
+            out_path = f'codegen/output/{arguments['fb_name'] + ".fbt"}'
         else:
-            out_path = output_path + '/' + arguments['fb_name']
+            out_path = output_path + '/' + arguments['fb_name'] + ".fbt"
         
         tmplt_vars = self.get_template_variables(self.template_name)
         vars_to_render = {key: arguments[key] for key in arguments.keys() & tmplt_vars}
@@ -544,18 +544,13 @@ class IEC61499Generator(GenericMcu):
             print(type(automato))
             print(automato.get_name())
             print(automato)
+            
+        #{event.name : {name : "egx", su_name: "SUx", enabled_states : [Sx, Sy...], ms_list : ["MSx", "MSy"...]}}
+        eg_list = dict()
 
-        eg_list = list()
-        """
-            self.path = path
-            self.su_name = su_name
-            self.event_name = event_name
-            self.enabled_states = enabled_states
-            self.ms_list = ms_list
-        """
         for automato in automata_list:
             if automato._name[0] == "G":
-                fb_name = "SU"+automato._name[1]+".fbt"
+                fb_name = "SU"+automato._name[1]
                 output_dict = self.generate_su(automato, fb_name, eg_list)
                 output_dict.update(vars_dict)
                 self._write(output_path, output_dict)
@@ -569,97 +564,112 @@ class IEC61499Generator(GenericMcu):
 
             else:
                 print("File error: " + automato._name)
+                break
     
         if eg_list:
-            for eg in eg_list:
-                output_dict = self.generate_eg(eg)
+            for event_name in eg_list:
+                #print(eg)
+                #print(eg_list[eg])
+                output_dict = self.generate_eg(event_name, eg_list[event_name])
                 output_dict.update(vars_dict)
                 self._write(output_path, output_dict)
 
     
     def generate_su(self, automato, fb_name, eg_list):
-        #[{"name":"a1"}, {"name:b2"}]
-        event_inputs = list()
-        event_outputs = list()
-
-        #[{"name": "State", "type": "INT"}, {"name": "En_a2", "type": "BOOL"}],
+    # Inicializa listas para eventos e variáveis
+        event_inputs = []
+        event_outputs = []
         input_vars = None
-        output_dict = dict(name = "State", type = "INT")
-        output_vars = [output_dict]
-        for var in output_vars:
-            print(var["name"])
-            print(var["type"])
+        output_vars = [{"name": "State", "type": "INT"}]
 
-        #{"S0":{"alg": "ALG2", "output": "Out"}}
-        states = list() #this will be used to store all the states, including the created auxiliary states
+        states = []
+        transitions = []
+        algorithms = []
 
-        #[{"source": "START", "destination": "S0", "condition": "Start"}],
-        transitions = list()
-
-        #[{"name": "ALG2", "st": "State := 2;"}]
-        algorithms = list()
-
-        repeated_states = list()
         initial_state = automato.initial_state
 
+        # Preenche eventos de entrada e saída
         for event in automato.event_name_map().values():
-            event_inputs.append({"name":event.name})
-            event_outputs.append({"name":event.name})
+            event_inputs.append({"name": event.name})
+            event_outputs.append({"name": event.name})
 
+        # Transições a partir do estado inicial
         for transition in initial_state.out_transitions:
-            transition_dict = dict(source = "S1_Start", destination = "S"+transition.to_state.name, condition = transition.event)
-            transitions.append(transition_dict)
+            transitions.append({
+                "source": "S1_Start",
+                "destination": "S" + transition.to_state.name,
+                "condition": transition.event
+            })
 
         for state in automato.states:
-            alg_name = "ALG"+state.name
-            state_dict = dict(name = "S"+state.name, alg = alg_name, output = state.output)  
-            states.append(state_dict) 
-            st_text = f"<![CDATA[State:={state.name};]]>"
-            algorithms.append({"name":alg_name, "st":st_text})
-            
-            #[(event : [from_state])]
+            alg_name = "ALG" + state.name
+            state_name = "S" + state.name
+            states.append({
+                "name": state_name,
+                "alg": alg_name,
+                "output": "Out_" + state.name
+            })
+            algorithms.append({
+                "name": alg_name,
+                "st": f"<![CDATA[State:={state.name};]]>"
+            })
+
+            # Mapeia os eventos de entrada para o estado
             event_map = {}
             for transition in state.in_transitions:
-
                 event = transition.event
-                if  event_map[event]:
-                    #criar novo estado para cada transição com evento diferente
-                    #mudar target de todas as transições
-                    #criar free transitions com source nos estados criados e target no estado original
-                    #new_transition = dict(source = transition.from_state, destination = state+"_", condition = transition.event)
-                    event_map[event].append(transition.from_state)
-                else:
-                    event_map[event] = [transition.from_state]
-
-            if len(event_map.keys()) == 1:
-                event = event_map.keys()
-                transition_dict = dict(source = "S"+event_map[event], destination = "S"+state, condition = event)
-                transitions.append(transition_dict)
-            else:    
-                sufix = 'a'
-                state_dict = dict(name = "S"+state.name+"_"+sufix, alg = alg_name, output = state.output)  
-                states.append(state_dict) 
-                for key_event, value_from_states in event_map:
-                    if len(value_from_states) == 1:
-                        transition_dict = dict(source = "S"+value_from_states[0], destination = "S"+state+"_"+sufix, condition = key_event)
-                        transitions.append(transition_dict)
+                if event.controllable:
+                    #{event.name : {name : "egx", su_name: "SUx", enabled_states : [Sx, Sy...], ms_list : ["MSx", "MSy"...]}}
+                    if eg_list.get(event.name):
+                        eg_list[event.name]["enabled_states"].append(transition.from_state)
                     else:
-                        for from_state in value_from_states:
-                            transition_dict = dict(source = "S"+from_state, destination = "S"+state, condition = key_event)
-                            transitions.append(transition_dict)
-                    sufix = chr(ord(sufix)+1)
+                        eg_info = {
+                            "name" : "eg"+fb_name[2:],#eg + identificador do SU
+                            "su_name" : fb_name,
+                            "event_name" : event.name,
+                            "enabled_states" : [transition.from_state],
+                            "ms_list" : []
+                        }
+                        eg_list[event.name] = (eg_info)
 
-            #add free transitions
 
-            #####################################################################
-            ### aqui preciso checar se só existe um evento chegando no estado ###
-            ### caso houver mais de um evento chegando no estado              ###
-            ### criar um estado auxiliar para cada evento diferente           ###
-            ### coloca-los como destination de cada transicao                 ###
-            ### criar transicoes livres para o estado original                ###
-            ### estado original nao tem out                                   ###
-            ### no codigo anterior, quando encontava um to_state igual com    ###
-            #####################################################################
+                if event not in event_map:
+                    event_map[event] = []
+                event_map[event].append(transition.from_state)
+
+            # Se só há um evento de entrada, adiciona transição direta
+            if len(event_map) == 1:
+                event = next(iter(event_map))
+                for from_state in event_map[event]:
+                    transitions.append({
+                        "source": "S" + from_state.name,
+                        "destination": state_name,
+                        "condition": event
+                    })
+            else:
+                # Cria estados auxiliares para cada evento com múltiplos from_states
+                sufix = 'a'
+                for event, from_states in event_map.items():
+                    aux_state_name = f"{state_name}_{sufix}"
+                    states.append({
+                        "name": aux_state_name,
+                    })
+
+                    for from_state in from_states:
+                        transitions.append({
+                            "source": "S" + from_state.name,
+                            "destination": aux_state_name,
+                            "condition": event
+                        })
+
+                    # Transição livre do auxiliar para o estado original
+                    transitions.append({
+                        "source": aux_state_name,
+                        "destination": state_name,
+                        "condition": "1"  # condição sempre verdadeira
+                    })
+
+                    sufix = chr(ord(sufix) + 1)
 
         data = {
             "fb_name": fb_name,
@@ -670,9 +680,32 @@ class IEC61499Generator(GenericMcu):
             "states": states,
             "transitions": transitions,
             "algorithms": algorithms
-        }   
-        print(data)
-        
+        }
+
+        return data
+
+    def generate_eg(self, event_name, eg_info):
+        #{name : "egx", su_name: "SUx", enabled_states : [Sx, Sy...], ms_list : ["MSx", "MSy"...]}
+        output_var = "State_"+eg_info["su_name"]
+        event_inputs = [{"name" : "EI"}]
+        event_outputs = [{"name" : "EO", "var" : output_var}]
+        input_vars = [{"name": output_var, "type": "INT"}]
+        output_vars = None
+        states = []
+        transitions = []
+        algorithms = []
+
+        data = {
+            "fb_name": eg_info["name"],
+            "event_inputs": event_inputs,
+            "event_outputs": event_outputs,
+            "input_vars": input_vars,
+            "output_vars": output_vars,
+            "states": states,
+            "transitions": transitions,
+            "algorithms": algorithms
+        }
+
         return data
 
     @staticmethod
