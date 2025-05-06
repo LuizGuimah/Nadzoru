@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FBType Name="SU1" Comment="Basic FB with empty ECC">
+	<Identification Standard="61499-2"/>
+	<VersionInfo Version="1.0" Author="06220625900" Date="2025-03-31"/>
+	<InterfaceList>
+		<EventInputs>
+			<Event Name="Start" Type="Event" Comment=""/>
+			<Event Name="a1" Type="Event" Comment=""/>
+			<Event Name="b1" Type="Event" Comment=""/>
+		</EventInputs>
+		<EventOutputs>
+			<Event Name="StartO" Type="Event" Comment="">
+				<With Var="State"/>
+			</Event>
+			<Event Name="Out" Type="Event" Comment="">
+				<With Var="State"/>
+			</Event>
+			<Event Name="Out_a1" Type="Event" Comment="">
+				<With Var="State"/>
+			</Event>
+			<Event Name="Out_b1" Type="Event" Comment="">
+				<With Var="State"/>
+			</Event>
+		</EventOutputs>
+		<OutputVars>
+			<VarDeclaration Name="State" Type="INT" Comment="" InitialValue="1"/>
+		</OutputVars>
+	</InterfaceList>
+	<BasicFB>
+		<ECC>
+			<ECState Name="START" Comment="Initial State" x="-2000" y="-1000"/>
+			<ECState Name="S0_Start" Comment="" x="-1000" y="-500">
+				<ECAction Output="Out"/>
+				<ECAction Algorithm="ALG0" Output="StartO"/>
+			</ECState>
+			<ECState Name="S0" Comment="" x="0" y="0">
+				<ECAction Algorithm="ALG0" Output="Out_b1"/>
+				<ECAction Output="Out"/>
+			</ECState>
+			<ECState Name="S1" Comment="" x="1000" y="500">
+				<ECAction Algorithm="ALG1" Output="Out_a1"/>
+				<ECAction Output="Out"/>
+			</ECState>
+			<ECTransition Source="START" Destination="S0_Start" Condition="Start" Comment="" x="-1500" y="-750"/>
+			<ECTransition Source="S0_Start" Destination="S1" Condition="a1" Comment="" x="-500" y="-250"/>
+			<ECTransition Source="S0" Destination="S1" Condition="a1" Comment="" x="500" y="250"/>
+			<ECTransition Source="S1" Destination="S0" Condition="b1" Comment="" x="1500" y="750"/>
+		</ECC>
+		<Algorithm Name="ALG0" Comment="">
+			<ST><![CDATA[State:=0;]]></ST>
+		</Algorithm>
+		<Algorithm Name="ALG1" Comment="">
+			<ST><![CDATA[State:=1;]]></ST>
+		</Algorithm>
+	</BasicFB>
+</FBType>

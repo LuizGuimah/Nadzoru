@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FBType Name="MSb" Comment="Basic FB with empty ECC">
+	<Identification Standard="61499-2"/>
+	<VersionInfo Version="1.0" Author="06220625900" Date="2025-03-31"/>
+	<InterfaceList>
+		<EventInputs>
+			<Event Name="Start" Type="Event" Comment=""/>
+			<Event Name="b2" Type="Event" Comment=""/>
+			<Event Name="a3" Type="Event" Comment=""/>
+		</EventInputs>
+		<EventOutputs>
+			<Event Name="StartO" Type="Event" Comment=""/>
+			<Event Name="Out" Type="Event" Comment="">
+				<With Var="State"/>
+				<With Var="En_a2"/>
+				<With Var="En_a3"/>
+			</Event>
+		</EventOutputs>
+		<OutputVars>
+			<VarDeclaration Name="State" Type="INT" Comment=""/>
+			<VarDeclaration Name="En_a2" Type="BOOL" Comment=""/>
+			<VarDeclaration Name="En_a3" Type="BOOL" Comment=""/>
+		</OutputVars>
+	</InterfaceList>
+	<BasicFB>
+		<ECC>
+			<ECState Name="START" Comment="Initial State" x="-2000" y="-1000"/>
+			<ECState Name="S0_Start" Comment="" x="-1000" y="-600">
+				<ECAction Output="StartO"/>
+			</ECState>
+			<ECState Name="S0" Comment="" x="1000" y="200">
+				<ECAction Algorithm="ALG0" Output="Out"/>
+			</ECState>
+			<ECState Name="S1" Comment="" x="2000" y="600">
+				<ECAction Algorithm="ALG1" Output="Out"/>
+			</ECState>
+			<ECTransition Source="START" Destination="S0_Start" Condition="Start" Comment="" x="-1500" y="-1000"/>
+			<ECTransition Source="S0_Start" Destination="S0" Condition="1" Comment="" x="-500" y="-600"/>
+			<ECTransition Source="S0" Destination="S1" Condition="b2" Comment="" x="500" y="-200"/>
+			<ECTransition Source="S1" Destination="S0" Condition="a3" Comment="" x="1500" y="200"/>
+		</ECC>
+		<Algorithm Name="ALG0" Comment="">
+			<ST><![CDATA[State:=0;
+			En_a2:=TRUE;
+			En_a3:=FALSE;
+			]]></ST>
+		</Algorithm>
+		<Algorithm Name="ALG1" Comment="">
+			<ST><![CDATA[State:=1;
+			En_a2:=FALSE;
+			En_a3:=TRUE;
+			]]></ST>
+		</Algorithm>
+	</BasicFB>
+</FBType>
