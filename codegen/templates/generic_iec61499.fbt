@@ -4,8 +4,9 @@
 	<VersionInfo Version="1.0" Author="0" Date="0000-00-00"/>
 	<InterfaceList>{% if event_inputs %}
 		<EventInputs>{% for event in event_inputs %}
-			<Event Name="{{ event.name }}" Type="Event" Comment=""/>{% if event.vars %}{% for var in event.vars %}
-                    <With Var="{{ var }}"/>{% endfor %}{% endif %}{% endfor %}
+			<Event Name="{{ event.name }}" Type="Event" Comment="">{% if event.vars %}{% for var in event.vars %}
+                <With Var="{{ var }}"/>{% endfor %}{% endif %}
+			</Event>{% endfor %}
 		</EventInputs>{% endif %}{% if event_outputs %}
 		<EventOutputs>{% for event in event_outputs %}
 			<Event Name="{{ event.name }}" Type="Event" Comment="">{% if event.vars %}{% for var in event.vars %}
@@ -16,7 +17,7 @@
             <VarDeclaration Name="{{ var.name }}" Type="{{ var.type }}"/>{% endfor %}
         </InputVars>{% endif %}{% if output_vars %}
         <OutputVars>{% for var in output_vars %}
-            <VarDeclaration Name="{{ var.name }}" Type="{{ var.type }}" Comment="" InitialValue="1"/>{% endfor %}
+            <VarDeclaration Name="{{ var.name }}" Type="{{ var.type }}" Comment=""  InitialValue={% if var.initialValue %}"{{ var.initialValue }}"{% else %}"1"{% endif %}/>{% endfor %}
         </OutputVars>{% endif %}
 	</InterfaceList>
 	<BasicFB>
