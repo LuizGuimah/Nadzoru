@@ -3,13 +3,13 @@
 	<Identification Standard="61499-2"/>
 	<VersionInfo Version="1.0" Author="0" Date="0000-00-00"/>
 	<InterfaceList>{% if event_inputs %}
-		<EventInputs>{% for event in event_inputs %}
-			<Event Name="{{ event.name }}" Type="Event" Comment="">{% if event.vars %}{% for var in event.vars %}
+		<EventInputs>{% for event in event_inputs.keys() %}
+			<Event Name="{{ event }}" Type="Event" Comment="">{% if event_inputs[event] %}{% for var in event_inputs[event] %}
                 <With Var="{{ var }}"/>{% endfor %}{% endif %}
 			</Event>{% endfor %}
 		</EventInputs>{% endif %}{% if event_outputs %}
-		<EventOutputs>{% for event in event_outputs %}
-			<Event Name="{{ event.name }}" Type="Event" Comment="">{% if event.vars %}{% for var in event.vars %}
+		<EventOutputs>{% for event in event_outputs.keys() %}
+			<Event Name="{{ event }}" Type="Event" Comment="">{% if event_outputs[event] %}{% for var in event_outputs[event] %}
                 <With Var="{{ var }}"/>{% endfor %}{% endif %}
             </Event>{% endfor %}
 		</EventOutputs>{% endif %}{% if input_vars %}
@@ -17,12 +17,12 @@
             <VarDeclaration Name="{{ var.name }}" Type="{{ var.type }}"/>{% endfor %}
         </InputVars>{% endif %}{% if output_vars %}
         <OutputVars>{% for var in output_vars %}
-            <VarDeclaration Name="{{ var.name }}" Type="{{ var.type }}" Comment=""  InitialValue={% if var.initialValue %}"{{ var.initialValue }}"{% else %}"1"{% endif %}/>{% endfor %}
+            <VarDeclaration Name="{{ var.name }}" Type="{{ var.type }}" Comment="" InitialValue={% if var.initialValue %}"{{ var.initialValue }}"{% else %}"1"{% endif %}/>{% endfor %}
         </OutputVars>{% endif %}
 	</InterfaceList>
 	<BasicFB>
 		<ECC>{% for state in states %}
-			<ECState Name="{{ state.name }}" Comment={% if state.comment %}"{{ state.comment }}"{% else %}"" {% endif %} x="0" y="0">{% if state.alg or state.output %}{% if state.alg %}
+			<ECState Name="{{ state.name }}" Comment={% if state.comment %}"{{ state.comment }}"{% else %}"" {% endif %} {% if state.pos %}x="{{ state.pos[0] }}" y="{{ state.pos[1] }}">{% else %}x="0" y="0">{% endif %}{% if state.alg or state.output %}{% if state.alg %}
 				<ECAction Algorithm="{{ state.alg }}"/>{% endif %}{% if state.output %}{% for out in state.output %}
 				<ECAction Output="{{ out }}"/>{% endfor %}{% endif %}{% endif %}
 			</ECState>{% endfor %}{% if transitions %}{% for transition in transitions %}
