@@ -22,11 +22,11 @@
 	</InterfaceList>
 	<BasicFB>
 		<ECC>{% for state in states %}
-			<ECState Name="{{ state.name }}" Comment={% if state.comment %}"{{ state.comment }}"{% else %}"" {% endif %} {% if state.pos %}x="{{ state.pos[0] }}" y="{{ state.pos[1] }}">{% else %}x="0" y="0">{% endif %}{% if state.alg or state.output %}{% if state.alg %}
+			<ECState Name="{{ state.name }}" Comment={% if state.comment %}"{{ state.comment }}"{% else %}"" {% endif %} {% if state.pos %}x="{{ state.pos[0] }}" y="{{ state.pos[1] }}"{% else %}x="0" y="0"{% endif %}>{% if state.alg or state.output %}{% if state.alg %}
 				<ECAction Algorithm="{{ state.alg }}"/>{% endif %}{% if state.output %}{% for out in state.output %}
 				<ECAction Output="{{ out }}"/>{% endfor %}{% endif %}{% endif %}
 			</ECState>{% endfor %}{% if transitions %}{% for transition in transitions %}
-            <ECTransition Source="{{ transition.source }}" Destination="{{ transition.destination }}" Condition="{{ transition.condition }}" Comment="" x="0" y="0"/>{% endfor %}{% endif %}
+            <ECTransition Source="{{ transition.source }}" Destination="{{ transition.destination }}" Condition="{{ transition.condition }}" Comment="" {% if transition.pos %}x="{{ transition.pos[0] }}" y="{{ transition.pos[1] }}"{% else %}x="0" y="0"{% endif %}/>{% endfor %}{% endif %}
 		</ECC>{% if algorithms %}{% for alg in algorithms %}
             <Algorithm Name="{{ alg.name }}" Comment="">
                 <ST>{{ alg.st }}</ST>

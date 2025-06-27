@@ -560,7 +560,7 @@ class IEC61499Generator(GenericMcu):
     
         if eg_dict:
             for event_name in eg_dict:
-                print(event_name + " " + str(eg_dict[event_name]))
+                #print(event_name + " " + str(eg_dict[event_name]))
                 output_dict = self.generate_eg(event=event_name, eg_info=eg_dict[event_name])
                 output_dict.update(vars_dict)
                 self._write(output_path, output_dict)
@@ -680,9 +680,8 @@ class IEC61499Generator(GenericMcu):
 
                     sufix = chr(ord(sufix) + 1) #incrementação do sufixo a + 1 = b
 
-        states = self.sugiyama_layout(states, transitions)
-        for n in states:
-            print(f'{n["name"]} -> pos: {n["pos"]}')
+        states, transitions = self.sugiyama_layout(states, transitions)
+
         data = {
             "fb_name": fb_name,
             "event_inputs": event_inputs,
@@ -697,7 +696,7 @@ class IEC61499Generator(GenericMcu):
         return data
 
     def generate_ms(self, automato, fb_name, eg_dict):
-        print(eg_dict)
+        #print(eg_dict)
         # Inicializa listas para eventos e variáveis
         initial_state = automato.initial_state.name
         start_name = "S" + initial_state + "_Start"
@@ -721,14 +720,14 @@ class IEC61499Generator(GenericMcu):
                 output_vars.append({"name" : event_name, "type" : "BOOL", "initialValue" : "FALSE"})
                 vars_list.append(event_name)
 
-                print("Event -> " + event.name)
+                #print("Event -> " + event.name)
                 if eg_dict.get(event.name):
-                    print("Encontrado")
+                    #print("Encontrado")
                     eg_dict[event.name]["ms_list"].append(event_name + "_" + fb_name)
                 else:
                     keys = eg_dict.keys()
-                    print(event.name + " nao encontrado em:")
-                    print(keys)
+                    #print(event.name + " nao encontrado em:")
+                    #print(keys)
         event_outputs["Out"] = vars_list
 
         for state in automato.states:
@@ -769,6 +768,8 @@ class IEC61499Generator(GenericMcu):
                 "st" : alg
             })
 
+        states, transitions = self.sugiyama_layout(states, transitions)
+
         data = {
             "fb_name": fb_name,
             "event_inputs": event_inputs,
@@ -789,8 +790,8 @@ class IEC61499Generator(GenericMcu):
         condition_st = "" #a ser gerado com infos do su e do ms
         event_outputs = {"EO" : None}
         input_vars = [{"name": su_var, "type": "INT"}]
-        states = [{"name" : "START", "comment" : "Initial State"},
-                  {"name":"State", "output":["EO"]}]
+        states = [{"name" : "START", "comment" : "Initial State", "pos" : [0, 0]},
+                  {"name":"State", "output":["EO"], "pos" : [1000, 0]}]
 
 
         #EI[En_a2_MSa and En_a2_MSb and (State_SU2=0)]
@@ -817,8 +818,9 @@ class IEC61499Generator(GenericMcu):
             condition_st += ")]"
 
         event_inputs = {"EI" : vars}
-        transitions = [{"source": "START", "destination":"State", "condition":condition_st},
-                    {"source":"State", "destination":"START", "condition":"1"}]
+        transitions = [{"source": "START", "destination":"State", "condition":condition_st, "pos" : [660, 400]},
+                    {"source":"State", "destination":"START", "condition":"1", "pos" : [660, -300]}]
+        
         
         data = {
             "fb_name": "EG_" + event,
@@ -832,69 +834,7 @@ class IEC61499Generator(GenericMcu):
         }
         return data
 
-
-    def sugiyama_layout(self, nodes, edges):
-        # Cria um dicionário dos nós
-        nodes_dict = {}
-        for node in nodes:
-            nodes_dict[node["name"]] = node
-
-        # Inicializa o grafo e os graus de entrada
-        graph = {}
-        in_degree = {}
-
-        for name in nodes_dict:
-            graph[name] = []
-            in_degree[name] = 0
-
-        for edge in edges:
-            source = edge["source"]
-            dest = edge["destination"]
-            graph[source].append(dest)
-            in_degree[dest] = in_degree.get(dest, 0) + 1
-
-        # Inicializa a camada dos nós
-        layer_build = {}
-        queue = []
-
-        # Nós sem predecessores recebem camada 0
-        for name in nodes_dict:
-            if in_degree[name] == 0:
-                layer_build[name] = 0
-                queue.append(name)
-
-        # Propaga camadas aos nós alcançáveis
-        while len(queue) > 0:
-            current = queue.pop(0)
-            current_layer = layer_build[current]
-
-            for neighbor in graph[current]:
-                proposed_layer = current_layer + 1
-                if neighbor not in layer_build or proposed_layer > layer_build[neighbor]:
-                    layer_build[neighbor] = proposed_layer
-                in_degree[neighbor] -= 1
-                if in_degree[neighbor] == 0:
-                    queue.append(neighbor)
-
-        # Agrupa os nós por camada
-        layers = {}
-        for name in layer_build:
-            layer = layer_build[name]
-            if layer not in layers:
-                layers[layer] = []
-            layers[layer].append(name)
-
-        # Atribui coordenadas (x, y) para cada nó
-        for layer in layers:
-            i = 0
-            for node_name in layers[layer]:
-                x = layer * 500
-                y = i * 200
-                nodes_dict[node_name]["pos"] = (x, y)
-                i += 1
-
-        return list(nodes_dict.values())
-    
+ 
     def sugiyama_layout(self, nodes, edges):
 #       nodes = [{"name" : "START", "comment" : "Initial State"}, {"name" : start_name, "output" : ["StartO"]}]
 #       edges = [{"source" : "START", "destination" : start_name, "condition" : "Start"},
@@ -902,11 +842,12 @@ class IEC61499Generator(GenericMcu):
 
         nodes_dict = dict()
         for node in nodes:
+            node["pos"] = [0, 0]
             nodes_dict[node["name"]] = node
 
         layer_count = 0
         layer_build = dict()
-        #layer_build = {"S1" : 1, "S2" : 3, "S3" : 3} it maps the node to its layer
+        #layer_build = {S1 : 1, S2 : 3, S3 : 1} it maps the node to its layer
 
         for edge in edges:
             dest_node = edge["destination"]
@@ -919,19 +860,33 @@ class IEC61499Generator(GenericMcu):
         
         layers  = dict()
         #layers = {1 : ["S1", "S3"], 3 : ["S2"]} maps the layer to a list of nodes
-        for i in range(layer_count):
+        for i in range(1, layer_count+1):
             layers[i] = []
 
         for node in layer_build.keys():
             layer = layer_build[node]
-            layers[node].append(node)
+            layers[layer].append(node)
 
         for layer in layers:
             i=0
             for node in layers[layer]:
+                x = layer * 1500
+                y = i * 1500
+                nodes_dict[node]["pos"] = [x, y]
                 i+=1
-                x = layer * 500
-                y = i * 200
-                nodes_dict[node]["pos"] = (x, y)
-        
+        offset = 0
+        increment = 50
+        for edge in edges:
+            src =  edge["source"]
+            dest = edge["destination"]
+            src_pos = nodes_dict[src]["pos"]
+            dest_pos = nodes_dict[dest]["pos"]
+            increment *= -1
+            offset = (offset * -1) + increment
+            edge_x = (src_pos[0] + dest_pos[0])/2 + offset
+            edge_y = (src_pos[1] + dest_pos[1])/2 + offset
+            edge["pos"] = [edge_x, edge_y]
+
         nodes = nodes_dict.values()
+
+        return nodes, edges
